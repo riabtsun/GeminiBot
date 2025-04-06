@@ -1,0 +1,166 @@
+import { Conversation } from "@grammyjs/conversations";
+import { MyContext, MyConversation, BotContext } from "../bot"; // Импортируем наш кастомный тип контекста
+import User from "../models/User"; // Импортируем модель пользователя
+import { Context, InlineKeyboard } from "grammy";
+
+// Определяем тип для нашей конкретной conversation
+// type MyConversation = Conversation<MyContext>;
+
+// Уникальный идентификатор для этого диалога
+export const REGISTRATION_CONVERSATION_ID = "registration";
+
+// Функция-генератор для диалога регистрации
+export async function registrationConversation(
+  conversation: MyConversation,
+  ctx: MyContext
+) {
+  // Проверяем, существует ли пользователь (на всякий случай, если команду вызвали повторно)
+  const existingUser = await conversation.external(() =>
+    User.findOne({ telegramId: ctx.from?.id })
+  );
+
+  if (existingUser) {
+    await ctx.reply("Вы уже зарегистрированы!");
+    return; // Завершаем диалог
+  }
+
+  await ctx.reply(
+    "Начинаем регистрацию! Пожалуйста, ответьте на несколько вопросов."
+  );
+
+  // --- Имя ---
+  await ctx.reply("1. Введите ваше имя:");
+  const firstNameCtx = await conversation.waitFor("message:text");
+  const firstName = firstNameCtx.message.text.trim();
+  if (!firstName) {
+    await ctx.reply("Имя не может быть пустым. Регистрация прервана.");
+    return;
+  }
+
+  // --- Фамилия ---
+  await ctx.reply("2. Введите вашу фамилию:");
+  const lastNameCtx = await conversation.waitFor("message:text");
+  const lastName = lastNameCtx.message.text.trim();
+  if (!lastName) {
+    await ctx.reply("Фамилия не может быть пустой. Регистрация прервана.");
+    return;
+  }
+
+  // --- Отчество (опционально) ---
+  const skipPatronymicKeyboard = new InlineKeyboard().text(
+    "Пропустить",
+    "skip_patronymic"
+  );
+  await ctx.reply('3. Введите ваше отчество (или нажмите "Пропустить"):', {
+    reply_markup: skipPatronymicKeyboard,
+  });
+
+  let patronymic: string | undefined = undefined;
+  // Ждем либо текстовое сообщение, либо нажатие кнопки 'skip_patronymic'
+  const patronymicAnswer = await conversation.waitFor([
+    "message:text",
+    "callback_query:data",
+  ]);
+
+  if (patronymicAnswer.message?.text) {
+    patronymic = patronymicAnswer.message.text.trim();
+    // Убираем кнопку после ответа текстом (лучше ответить на callback_query, если он был)
+    await patronymicAnswer.reply("Отчество сохранено.", {
+      reply_markup: { remove_keyboard: true },
+    });
+  } else if (patronymicAnswer.callbackQuery?.data === "skip_patronymic") {
+    await patronymicAnswer.answerCallbackQuery({ text: "Отчество пропущено." });
+    // Удаляем клавиатуру после нажатия кнопки
+    await ctx.api.editMessageReplyMarkup(
+      patronymicAnswer.chatId!,
+      patronymicAnswer.callbackQuery.message?.message_id!
+    );
+  } else {
+    // Неожиданный ответ
+    await ctx.reply("Неожиданный ответ. Регистрация прервана.");
+    // Если был callback_query, но не тот, отвечаем на него, чтобы убрать "часики"
+    // await patronymicAnswer.callbackQuery?.answerCallbackQuery();
+    await patronymicAnswer.answerCallbackQuery();
+    return;
+  }
+
+  // --- Часовой пояс ---
+  // await ctx.reply(`4. Введите ваш часовой пояс в формате IANA (например, \`Europe/Kiev\`, \`Asia/Tbilisi\`, \`UTC\`). \nЭто важно для своевременных напоминаний.`);
+  // let timezone: string | undefined = undefined;
+  // while (!timezone) {
+  //     const timezoneCtx = await conversation.waitFor('message:text');
+  //     const potentialTimezone = timezoneCtx.message.text.trim();
+  //     // Простая проверка валидности (не 100% надежная, но отсеет явный мусор)
+  //     try {
+  //         Intl.DateTimeFormat(undefined, { timeZone: potentialTimezone });
+  //         timezone = potentialTimezone;
+  //     } catch (e) {
+  //         await ctx.reply('Неверный формат часового пояса. Попробуйте еще раз (например, `Europe/Kiev`):');
+  //     }
+  // }
+
+  // --- Время утреннего измерения ---
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // Регулярка для ЧЧ:ММ
+  await ctx.reply(
+    "5. Введите желаемое время для *утреннего* измерения (в формате ЧЧ:ММ, например, `08:00`):"
+  );
+  let morningTime: string | undefined = undefined;
+  while (!morningTime) {
+    const morningTimeCtx = await conversation.waitFor("message:text");
+    const timeInput = morningTimeCtx.message.text.trim();
+    if (timeRegex.test(timeInput)) {
+      morningTime = timeInput;
+    } else {
+      await ctx.reply(
+        "Неверный формат времени. Введите время в формате ЧЧ:ММ (например, `08:00`):"
+      );
+    }
+  }
+
+  // --- Время вечернего измерения ---
+  await ctx.reply(
+    "6. Введите желаемое время для *вечернего* измерения (в формате ЧЧ:ММ, например, `20:30`):"
+  );
+  let eveningTime: string | undefined = undefined;
+  while (!eveningTime) {
+    const eveningTimeCtx = await conversation.waitFor("message:text");
+    const timeInput = eveningTimeCtx.message.text.trim();
+    if (timeRegex.test(timeInput)) {
+      eveningTime = timeInput;
+    } else {
+      await ctx.reply(
+        "Неверный формат времени. Введите время в формате ЧЧ:ММ (например, `20:30`):"
+      );
+    }
+  }
+
+  // --- Сохранение пользователя ---
+  try {
+    await conversation.external(() =>
+      User.create({
+        telegramId: ctx.from?.id,
+        chatId: ctx.chat?.id,
+        firstName,
+        lastName,
+        patronymic, // Будет undefined, если пропущено
+        // timezone,
+        morningTime,
+        eveningTime,
+        isActive: true, // Активируем пользователя
+      })
+    );
+
+    await ctx.reply(`🎉 Регистрация успешно завершена!
+        Имя: ${firstName} \n
+        Фамилия: ${lastName} \n
+        ${patronymic ? "Отчество :" + patronymic : ""} \n
+        Утреннее измерение: ${morningTime} \n
+        Вечернее измерение: ${eveningTime} \n
+        Я буду напоминать вам об измерениях за 60 и 30 минут до указанного времени и присылать запрос в назначенное время.`);
+  } catch (error) {
+    console.error("Ошибка при создании пользователя:", error);
+    await ctx.reply(
+      "Произошла ошибка при сохранении данных. Попробуйте зарегистрироваться позже. /register"
+    );
+  }
+}

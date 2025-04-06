@@ -44,7 +44,7 @@ interface SessionData {
 export interface BotContext extends Context {
   session: SessionData;
 }
-export type MyContext = BotContext & ConversationFlavor<BotContext>;
+export type MyContext = BotContext & ConversationFlavor<Context, BotContext>;
 // <<<--- Экспортируем тип контекста
 export type MyConversation = Conversation<MyContext>;
 
