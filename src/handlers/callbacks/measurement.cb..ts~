@@ -1,0 +1,44 @@
+import { MyContext } from "../../bot";
+import User from "../../models/User";
+import { InlineKeyboard } from "grammy";
+import Measurement from "../../models/Measurement";
+import { EDIT_MEASUREMENT_CONVERSATION_ID } from "../../controllers/editMeasurement";
+
+export async function handleEditLastMeasurement(ctx: MyContext) {
+  if (!ctx.from || !ctx.chat) return;
+
+  const userId = ctx.from.id;
+  console.log(
+    `[Callback edit_last_measurement] Пользователь ${userId} хочет отредактировать последнее измерение`
+  );
+
+  const lastMeasurement = await Measurement.findOne({ userId }).sort({
+    timestamp: -1,
+  });
+
+  if (!lastMeasurement) {
+    await ctx.answerCallbackQuery(
+      "У вас пока нет измерений для редактирования"
+    );
+    return;
+  }
+
+  ctx.session.lastMeasurementId = lastMeasurement?._id?.toString();
+  await ctx.conversation.enter(EDIT_MEASUREMENT_CONVERSATION_ID);
+}
+
+export async function handleEnterMeasurement(ctx: MyContext) {
+  if (!ctx.chat || !ctx.from) return;
+
+  ctx.session.expectingMeasurement = true;
+  console.log(
+    `[Callback enter_measurement] Ожидание ввода измерения для пользователя ${ctx.from.id}`
+  );
+
+  await ctx.reply(
+    "Пожалуйста, введите ваши показатели в формате:\n" +
+      "систолическое/диастолическое/пульс\n" +
+      "Например: 120/80/70"
+  );
+  await ctx.answerCallbackQuery();
+}

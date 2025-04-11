@@ -10,7 +10,7 @@ export interface IMeasurement extends Document {
   // createdAt и updatedAt добавляются автоматически (timestamps: true)
 }
 
-const MeasurementSchema: Schema = new Schema(
+const MeasurementSchema: Schema = new Schema<IMeasurement>(
   {
     userId: {
       type: Schema.Types.ObjectId, // Тип для ссылки на другой документ

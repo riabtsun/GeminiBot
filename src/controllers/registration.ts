@@ -1,10 +1,10 @@
 import { Conversation } from "@grammyjs/conversations";
-import { MyContext, MyConversation, BotContext } from "../bot"; // Импортируем наш кастомный тип контекста
+import { MyContext, BotContext } from "../bot"; // Импортируем наш кастомный тип контекста
 import User from "../models/User"; // Импортируем модель пользователя
 import { Context, InlineKeyboard } from "grammy";
 
 // Определяем тип для нашей конкретной conversation
-// type MyConversation = Conversation<MyContext>;
+type MyConversation = Conversation<MyContext, MyContext>;
 
 // Уникальный идентификатор для этого диалога
 export const REGISTRATION_CONVERSATION_ID = "registration";
@@ -12,7 +12,7 @@ export const REGISTRATION_CONVERSATION_ID = "registration";
 // Функция-генератор для диалога регистрации
 export async function registrationConversation(
   conversation: MyConversation,
-  ctx: Context
+  ctx: MyContext
 ) {
   // Проверяем, существует ли пользователь (на всякий случай, если команду вызвали повторно)
   const existingUser = await conversation.external(() =>

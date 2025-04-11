@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { Bot, InlineKeyboard } from "grammy";
-import { MyContext } from "../bot"; // Наш кастомный контекст
+import { MyContext } from "../bot";
 import User, { IUser } from "../models/User";
 import { subMinutes, parse, format } from "date-fns"; // Для работы со временем
 
@@ -35,12 +35,15 @@ export class ScheduleService {
         `Найдено ${activeUsers.length} активных пользователей для планирования.`
       );
       activeUsers.forEach((user) => {
+        console.log(
+          `[CRON] Планирование для ${user.telegramId} (${user.firstName})`
+        );
         // Проверяем валидность данных перед планированием
         if (this.validateUserData(user)) {
           this.scheduleUserTasks(user);
         } else {
           console.warn(
-            `Пользователь <span class="math-inline">\{user\.telegramId\} \(</span>{user.firstName}) имеет невалидные данные времени или таймзоны. Задачи не запланированы.`
+            `Пользователь ${user.telegramId} ${user.firstName} имеет невалидные данные времени или таймзоны. Задачи не запланированы.`
           );
           // Можно добавить логику для уведомления пользователя или администратора
         }
@@ -57,6 +60,7 @@ export class ScheduleService {
    */
   public removeUserTasks(telegramId: number) {
     const userTasks = this.scheduledTasks.get(telegramId);
+
     if (userTasks) {
       Object.values(userTasks).forEach((task) => task?.stop());
       this.scheduledTasks.delete(telegramId);
@@ -80,17 +84,6 @@ export class ScheduleService {
       return;
     }
 
-    const tasks: UserTasks = {};
-    // Проверяем валидность еще раз на всякий случай
-    if (!this.validateUserData(user)) {
-      console.warn(
-        `Повторная проверка: Пользователь <span class="math-inline">\{user\.telegramId\} \(</span>{user.firstName}) имеет невалидные данные. Задачи не запланированы.`
-      );
-      return;
-    }
-
-    // const timezone = user.timezone; // Берем таймзону пользователя
-
     try {
       const measurementKeyboard = new InlineKeyboard().text(
         "✍️ Ввести результат",
@@ -100,6 +93,9 @@ export class ScheduleService {
       // --- Утренние задачи ---
       const morningTime = this.parseTime(user.morningTime); // 'HH:MM' -> { hour: H, minute: M }
 
+      // const timezone = user.timezone; // Берем таймзону пользователя
+ 
+      const tasks: UserTasks = {};
       if (morningTime) {
         const reminder1Time = subMinutes(morningTime.date, 60);
         const reminder2Time = subMinutes(morningTime.date, 30);
@@ -191,7 +187,7 @@ export class ScheduleService {
           try {
             await this.bot.api.sendMessage(chatId, message, {
               parse_mode: "Markdown",
-              reply_markup: keyboard // Используется здесь
+              reply_markup: keyboard, // Используется здесь
             });
           } catch (error: any) {
             console.error(
@@ -239,11 +235,20 @@ export class ScheduleService {
   ): { hour: number; minute: number; date: Date } | null {
     const match = timeString.match(/^(\d{2}):(\d{2})$/);
     if (!match) return null;
+
     const hour = parseInt(match[1], 10);
     const minute = parseInt(match[2], 10);
+
     // Создаем объект Date с текущей датой, но нужным временем
-    const date = new Date();
-    date.setHours(hour, minute, 0, 0);
+    const now = new Date();
+    const date = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      hour,
+      minute,
+      0
+    );
     return { hour, minute, date };
   }
 
@@ -257,13 +262,13 @@ export class ScheduleService {
   /**
    * Проверяет валидность таймзоны.
    */
-  private validateTimezone(tz: string): boolean {
-    try {
-      Intl.DateTimeFormat(undefined, { timeZone: tz });
-      return true;
-    } catch (e) {
-      console.warn(`[Validation] Невалидная таймзона: ${tz}`);
-      return false;
-    }
-  }
+  // private validateTimezone(tz: string): boolean {
+  //   try {
+  //     Intl.DateTimeFormat(undefined, { timeZone: tz });
+  //     return true;
+  //   } catch (e) {
+  //     console.warn(`[Validation] Невалидная таймзона: ${tz}`);
+  //     return false;
+  //   }
+  // }
 }

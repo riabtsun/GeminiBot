@@ -3,7 +3,7 @@ import { type MyContext } from "../bot";
 import User from "../models/User";
 import { InlineKeyboard } from "grammy";
 
-type MyConversation = Conversation<MyContext>;
+type MyConversation = Conversation<MyContext, MyContext>;
 
 export const EDIT_PROFILE_CONVERSATION_ID = "edit_profile_conv";
 
