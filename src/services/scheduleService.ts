@@ -17,7 +17,7 @@ interface UserTasks {
 export class ScheduleService {
   private bot: Bot<MyContext>;
   // Хранилище для активных cron-задач, ключ - telegramId
-  private scheduledTasks: Map<number, UserTasks> = new Map();
+  scheduledTasks: Map<number, UserTasks> = new Map();
 
   constructor(botInstance: Bot<MyContext>) {
     this.bot = botInstance;

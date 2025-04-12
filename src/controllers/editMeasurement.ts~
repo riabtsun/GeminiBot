@@ -1,3 +1,4 @@
+import { Conversation } from "@grammyjs/conversations";
 import { MyConversation, MyContext } from "../bot";
 import Measurement from "../models/Measurement";
 

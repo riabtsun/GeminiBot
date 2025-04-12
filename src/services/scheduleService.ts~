@@ -17,7 +17,7 @@ interface UserTasks {
 export class ScheduleService {
   private bot: Bot<MyContext>;
   // Хранилище для активных cron-задач, ключ - telegramId
-  private scheduledTasks: Map<number, UserTasks> = new Map();
+  scheduledTasks: Map<number, UserTasks> = new Map();
 
   constructor(botInstance: Bot<MyContext>) {
     this.bot = botInstance;
@@ -94,7 +94,7 @@ export class ScheduleService {
       const morningTime = this.parseTime(user.morningTime); // 'HH:MM' -> { hour: H, minute: M }
 
       // const timezone = user.timezone; // Берем таймзону пользователя
- 
+
       const tasks: UserTasks = {};
       if (morningTime) {
         const reminder1Time = subMinutes(morningTime.date, 60);
@@ -225,6 +225,7 @@ export class ScheduleService {
       this.validateTimeFormat(user.eveningTime)
       // this.validateTimezone(user.timezone)
     );
+
   }
 
   /**

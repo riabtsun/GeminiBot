@@ -1,12 +1,9 @@
-import { CallbackQueryContext } from "grammy";
 import User from "../../models/User";
 import Measurement from "../../models/Measurement";
 import { format } from "date-fns";
 import { MyContext } from "../../bot";
 
-export const editLastMeasurement = async (
-  ctx: CallbackQueryContext<MyContext>
-) => {
+export const editLastMeasurement = async (ctx: MyContext) => {
   if (!ctx.from || !ctx.chat) return;
 
   const userId = ctx.from.id;
@@ -16,7 +13,7 @@ export const editLastMeasurement = async (
 
   try {
     await ctx.answerCallbackQuery({ text: "Ищу последнее измерение..." });
-
+    ctx.session.expectingMeasurement = true;
     // Удаляем клавиатуру из предыдущего сообщения
     if (ctx?.callbackQuery?.message) {
       try {
@@ -46,9 +43,7 @@ export const editLastMeasurement = async (
     console.log(
       `[Callback edit_last_measurement] Проверка ctx.session перед записью ID для user ${userId}.`
     );
-    console.log(
-      `[Callback edit_last_measurement] Тип ctx.session: ${typeof ctx.session}`
-    );
+
     // Выведем сам объект сессии, если он есть (может быть полезно)
     if (ctx.session) {
       console.log(
@@ -93,6 +88,18 @@ export const editLastMeasurement = async (
     Пульс: ${lastMeasurement.pulse}
 
     Хотите изменить эти значения? Начинаем процесс редактирования...`);
+
+    // До входа в диалог
+    console.log(`[Callback edit_last_measurement] Проверка сессии:`, {
+      sessionExists: Boolean(ctx.session),
+      lastMeasurementId: ctx.session?.lastMeasurementId,
+    });
+
+    // Убедитесь, что ID измерения сохранен
+    if (!ctx.session.lastMeasurementId) {
+      await ctx.reply("Ошибка: ID измерения не сохранен в сессии");
+      return;
+    }
 
     // 5. Запустить диалог редактирования
     await ctx.conversation.enter("edit_measurement_conv"); // ID диалога определим на след. шаге

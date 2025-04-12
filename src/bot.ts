@@ -5,6 +5,7 @@ import {
   SessionFlavor,
   InlineKeyboard,
   CallbackQueryContext,
+  NextFunction,
 } from "grammy";
 import { run, sequentialize } from "@grammyjs/runner";
 import {
@@ -48,16 +49,7 @@ import { editLastMeasurement } from "./handlers/callbacks/editLastMeasurement";
 
 interface SessionData {
   expectingMeasurement?: boolean;
-  lastMeasurementId?: string | undefined;
-  // userId?: number;
-  // username?: string;
-  // registrationComplete?: boolean;
-  // lastPressure?: {
-  //   systolic: number;
-  //   diastolic: number;
-  //   pulse: number;
-  //   timestamp: Date;
-  // };
+  lastMeasurementId?: string;
 }
 
 export interface BotContext extends Context {
@@ -83,10 +75,8 @@ function getSessionKey(ctx: MyContext) {
 }
 
 const bot = new Bot<MyContext>(BOT_TOKEN);
-bot.use(conversations());
 const scheduleService = new ScheduleService(bot);
 
-bot.use(sequentialize(getSessionKey));
 bot.use(
   session({
     initial: (): SessionData => ({
@@ -99,7 +89,10 @@ bot.use(
   })
 );
 
-bot.use((ctx, next) => {
+bot.use(conversations());
+bot.use(sequentialize(getSessionKey));
+
+bot.use((ctx: MyContext, next: NextFunction) => {
   ctx.scheduleService = scheduleService;
   return next();
 });
