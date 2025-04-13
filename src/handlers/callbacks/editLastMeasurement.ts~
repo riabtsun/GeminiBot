@@ -13,6 +13,7 @@ export const editLastMeasurement = async (ctx: MyContext) => {
 
   try {
     await ctx.answerCallbackQuery({ text: "Ищу последнее измерение..." });
+    ctx.session.expectingMeasurement = true;
     // Удаляем клавиатуру из предыдущего сообщения
     if (ctx?.callbackQuery?.message) {
       try {

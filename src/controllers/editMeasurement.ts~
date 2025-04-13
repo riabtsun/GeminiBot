@@ -1,4 +1,3 @@
-import { Conversation } from "@grammyjs/conversations";
 import { MyConversation, MyContext } from "../bot";
 import Measurement from "../models/Measurement";
 
@@ -9,9 +8,13 @@ export async function editMeasurementConversation(
   conversation: MyConversation,
   ctx: MyContext
 ) {
+  const session = await conversation.external((ctx) => ctx.session);
+
+  console.log("session at start", session);
+
   const userId = ctx.from?.id;
   // Получаем ID измерения из сессии
-  const measurementId = ctx.session.lastMeasurementId;
+  const measurementId = session.lastMeasurementId;
 
   if (!userId || !measurementId) {
     await ctx.reply(

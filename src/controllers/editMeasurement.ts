@@ -8,16 +8,20 @@ export async function editMeasurementConversation(
   conversation: MyConversation,
   ctx: MyContext
 ) {
+  const session = await conversation.external((ctx) => ctx.session);
+
+  console.log("session at start", session);
+
   const userId = ctx.from?.id;
   // Получаем ID измерения из сессии
-  const measurementId = ctx.session.lastMeasurementId;
+  const measurementId = session.lastMeasurementId;
 
   if (!userId || !measurementId) {
     await ctx.reply(
       "Произошла ошибка: не найден ID редактируемого измерения. Пожалуйста, начните сначала с команды /edit."
     );
     // Очищаем на всякий случай
-    ctx.session.lastMeasurementId = "";
+    session.lastMeasurementId = "";
     return;
   }
 
@@ -113,6 +117,6 @@ export async function editMeasurementConversation(
     );
   } finally {
     // Очищаем ID из сессии независимо от результата
-    ctx.session.lastMeasurementId = "";
+    session.lastMeasurementId = "";
   }
 }
