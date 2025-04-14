@@ -2,15 +2,16 @@ import User from "../../models/User";
 import Measurement from "../../models/Measurement";
 import { NextFunction } from "grammy";
 import { measurementRegex, MyContext } from "../../bot";
+import { botTexts } from "../../botTexts";
 
 export const measurementValidator = async (
   ctx: MyContext,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   // Сначала проверяем, не является ли сообщение командой
   if (ctx?.message?.text?.startsWith("/")) {
     console.log(
-      `[Text Handler] Сообщение является командой "${ctx.message.text}", сбрасываем флаг ожидания (если был) и передаем дальше.`
+      `[Text Handler] Сообщение является командой "${ctx.message.text}", сбрасываем флаг ожидания (если был) и передаем дальше.`,
     );
     ctx.session.expectingMeasurement = false; // Сбрасываем флаг на всякий случай
     return await next(); // Передаем управление обработчикам команд
@@ -19,14 +20,14 @@ export const measurementValidator = async (
   // Проверяем, ожидаем ли мы ввода измерения от этого пользователя
   if (!ctx.session.expectingMeasurement) {
     console.log(
-      `[Text Handler] Флаг ожидания не установлен для ${ctx.from?.id}, передаем дальше.`
+      `[Text Handler] Флаг ожидания не установлен для ${ctx.from?.id}, передаем дальше.`,
     );
     return await next(); // Если не ожидаем, передаем управление дальше (если есть другие обработчики)
   }
 
   // --- Если мы ожидаем ввод ---
   console.log(
-    `[Text Handler] Ожидается ввод от ${ctx.from?.id}. Проверяем сообщение: "${ctx?.message?.text}"`
+    `[Text Handler] Ожидается ввод от ${ctx.from?.id}. Проверяем сообщение: "${ctx?.message?.text}"`,
   );
 
   const match = ctx?.message?.text?.match(measurementRegex);
@@ -48,11 +49,9 @@ export const measurementValidator = async (
         pulse < 30 ||
         pulse > 250
       ) {
-        await ctx.reply(
-          "😬 Кажется, введенные значения выходят за разумные пределы. Пожалуйста, проверьте и попробуйте снова (например: 120/80 75)."
-        );
+        await ctx.reply(botTexts.measurementValidator.invalidValues);
         console.warn(
-          `[Text Handler] Невалидные значения от ${ctx.from?.id}: ${systolic}/${diastolic} ${pulse}`
+          `[Text Handler] Невалидные значения от ${ctx.from?.id}: ${systolic}/${diastolic} ${pulse}`,
         );
         // НЕ сбрасываем флаг, ждем корректного ввода
         return;
@@ -62,9 +61,7 @@ export const measurementValidator = async (
       const user = await User.findOne({ telegramId: ctx.from?.id });
       if (!user) {
         // Этого не должно произойти, если флаг установлен, но проверим
-        await ctx.reply(
-          "Произошла ошибка: не могу найти вашу регистрацию. Пожалуйста, попробуйте /start."
-        );
+        await ctx.reply(botTexts.measurementValidator.registrationError);
         ctx.session.expectingMeasurement = false; // Сбрасываем флаг
         return;
       }
@@ -79,33 +76,29 @@ export const measurementValidator = async (
       });
 
       console.log(
-        `[Text Handler] Сохранено измерение ${newMeasurement._id} для пользователя ${ctx.from?.id}`
+        `[Text Handler] Сохранено измерение ${newMeasurement._id} для пользователя ${ctx.from?.id}`,
       );
       await ctx.reply(
-        `✅ Давление ${systolic}/${diastolic} и пульс ${pulse} сохранены. Спасибо!`
+        `✅ Тиск ${systolic}/${diastolic} і пульс ${pulse} збережено. Дякую!`,
       );
       ctx.session.expectingMeasurement = false; // <<<--- СБРАСЫВАЕМ ФЛАГ ожидания
     } catch (error) {
       console.error(
         `[Text Handler] Ошибка при сохранении измерения от ${ctx.from?.id}:`,
-        error
+        error,
       );
-      await ctx.reply(
-        "Не удалось сохранить измерение. Попробуйте еще раз или обратитесь к администратору."
-      );
+      await ctx.reply(botTexts.measurementValidator.savingError);
       // Сбрасывать ли флаг при ошибке сохранения - спорно. Пока оставим, чтобы не зацикливаться.
       ctx.session.expectingMeasurement = false;
     }
   } else {
     // --- Формат НЕ совпал ---
     console.log(
-      `[Text Handler] Неверный формат от ${ctx.from?.id}: "${ctx?.message?.text}"`
+      `[Text Handler] Неверный формат от ${ctx.from?.id}: "${ctx?.message?.text}"`,
     );
     await ctx.reply(
-      "❗️ Неверный формат.\n" +
-        "Пожалуйста, введите данные в формате **Давление/Давление Пульс** (числа через `/` или пробел, затем пробел и пульс).\n" +
-        "Например: `120/80 75`",
-      { parse_mode: "Markdown" } // Используем Markdown для выделения
+      botTexts.measurementValidator.invalidFormat,
+      { parse_mode: "Markdown" }, // Используем Markdown для выделения
     );
     // НЕ сбрасываем флаг, продолжаем ожидать корректного ввода
   }

@@ -5,9 +5,9 @@ import { MyContext } from "../../bot";
 export const editScheduleCb = async (ctx: CallbackQueryContext<MyContext>) => {
   if (!ctx.from || !ctx.chat) return;
   console.log(
-    `[Callback edit_schedule] Нажата кнопка пользователем ${ctx.from.id}`
+    `[Callback edit_schedule] Нажата кнопка пользователем ${ctx.from.id}`,
   );
-  await ctx.answerCallbackQuery({ text: "Начинаем изменение времени..." });
+  await ctx.answerCallbackQuery({ text: "Починаємо зміну часу..." });
 
   // Удаляем клавиатуру из предыдущего сообщения
   if (ctx.callbackQuery.message) {
@@ -16,7 +16,7 @@ export const editScheduleCb = async (ctx: CallbackQueryContext<MyContext>) => {
     } catch (e) {
       console.warn(
         `[Callback edit_schedule] Не удалось убрать клавиатуру у сообщения ${ctx.callbackQuery.message.message_id}`,
-        e
+        e,
       );
     }
   }

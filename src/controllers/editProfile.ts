@@ -2,6 +2,7 @@ import { type Conversation } from "@grammyjs/conversations";
 import { type MyContext } from "../bot";
 import User from "../models/User";
 import { InlineKeyboard } from "grammy";
+import { botTexts } from "../botTexts";
 
 type MyConversation = Conversation<MyContext, MyContext>;
 
@@ -10,13 +11,13 @@ export const EDIT_PROFILE_CONVERSATION_ID = "edit_profile_conv";
 async function askForText(
   conversation: MyConversation,
   ctx: MyContext,
-  prompt: string
+  prompt: string,
 ): Promise<string> {
   await ctx.reply(prompt);
   const responseCtx = await conversation.waitFor("message:text");
   const text = responseCtx.message.text.trim();
   if (!text) {
-    await ctx.reply("Ввод не может быть пустым. Попробуйте еще раз.");
+    await ctx.reply(botTexts.editProfile.emptyInput);
     // Рекурсивно вызываем себя же, чтобы переспросить
     return await askForText(conversation, ctx, prompt);
   }
@@ -26,34 +27,34 @@ async function askForText(
 // --- Функция диалога для изменения ФИО ---
 export async function editProfileConversation(
   conversation: MyConversation,
-  ctx: MyContext
+  ctx: MyContext,
 ) {
   const userId = ctx.from?.id;
   if (!userId) {
-    await ctx.reply("Не удалось определить ваш ID. Изменение невозможно.");
+    await ctx.reply(botTexts.editProfile.idError);
     return;
   }
 
-  await ctx.reply("📝 Начинаем изменение ФИО.");
+  await ctx.reply(botTexts.editProfile.nameChange);
 
   // --- Имя ---
   const newFirstName = await askForText(
     conversation,
     ctx,
-    "Введите новое имя:"
+    "Введіть нове ім'я:",
   );
 
   // --- Фамилия ---
   const newLastName = await askForText(
     conversation,
     ctx,
-    "Введите новую фамилию:"
+    "Введіть нове призвіще:",
   );
 
   // --- Отчество (опционально) ---
   const skipPatronymicKeyboard = new InlineKeyboard().text(
-    "Оставить пустым",
-    "skip_patronymic_edit"
+    "залишити порожнім",
+    "skip_patronymic_edit",
   );
   await ctx.reply('Введите новое отчество (или нажмите "Оставить пустым"):', {
     reply_markup: skipPatronymicKeyboard,
@@ -67,20 +68,20 @@ export async function editProfileConversation(
 
   if (patronymicAnswer.message?.text) {
     newPatronymic = patronymicAnswer.message.text.trim();
-    await patronymicAnswer.reply("Отчество сохранено.", {
+    await patronymicAnswer.reply("По батькові збережено.", {
       reply_markup: { remove_keyboard: true },
     });
   } else if (patronymicAnswer.callbackQuery?.data === "skip_patronymic_edit") {
     newPatronymic = undefined; // Убеждаемся, что оно undefined
     await patronymicAnswer.answerCallbackQuery({
-      text: "Отчество будет удалено/оставлено пустым.",
+      text: "По батькові буде видалено/залишено порожнім.",
     });
     await ctx.api.editMessageReplyMarkup(
       patronymicAnswer.chatId!,
-      patronymicAnswer.callbackQuery.message?.message_id!
+      patronymicAnswer.callbackQuery.message?.message_id!,
     );
   } else {
-    await ctx.reply("Неожиданный ответ. Изменение ФИО прервано.");
+    await ctx.reply("Неочікувана відповідь. Зміну ПІБ прервано.");
     await ctx.api.answerCallbackQuery(patronymicAnswer.callbackQuery!.id);
     return;
   }
@@ -104,38 +105,36 @@ export async function editProfileConversation(
       User.findOneAndUpdate(
         { telegramId: userId }, // Находим пользователя по ID
         updateData,
-        { new: true } // Возвращаем обновленный документ (хотя здесь он не обязателен)
-      )
+        { new: true }, // Возвращаем обновленный документ (хотя здесь он не обязателен)
+      ),
     );
 
     if (!updatedUser) {
       // Это странно, если пользователь дошел до сюда, но обработаем
       await ctx.reply(
-        "Не удалось найти вашу запись для обновления. Попробуйте /start."
+        "Не удалось найти вашу запись для обновления. Попробуйте /start.",
       );
       return;
     }
 
-    await ctx.reply(`✅ Ваши ФИО успешно обновлены!
-                    Новое имя: ${updatedUser.firstName}
-                    Новая фамилия: ${updatedUser.lastName}
+    await ctx.reply(`✅ Ваші ПІБ успішно оновлено!
+                    Нове ім'я: ${updatedUser.firstName}
+                    Нове призвіще: ${updatedUser.lastName}
                     ${
                       updatedUser.patronymic
-                        ? "Новое отчество: " + updatedUser.patronymic
-                        : "Отчество: (не указано)"
+                        ? "Нове по батькові: " + updatedUser.patronymic
+                        : "По батькові: (не вказано)"
                     }`);
 
     console.log(
-      `[Conv edit_profile] Пользователь ${userId} успешно обновил ФИО.`
+      `[Conv edit_profile] Пользователь ${userId} успешно обновил ФИО.`,
     );
   } catch (error) {
     console.error(
       `[Conv edit_profile] Ошибка обновления ФИО для ${userId}:`,
-      error
+      error,
     );
-    await ctx.reply(
-      "❌ Произошла ошибка при сохранении новых данных. Попробуйте снова позже."
-    );
+    await ctx.reply(botTexts.editProfile.idError);
   }
   return;
 }

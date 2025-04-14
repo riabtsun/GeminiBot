@@ -32,18 +32,18 @@ export class ScheduleService {
     try {
       const activeUsers = await User.find({ isActive: true });
       console.log(
-        `Найдено ${activeUsers.length} активных пользователей для планирования.`
+        `Найдено ${activeUsers.length} активных пользователей для планирования.`,
       );
       activeUsers.forEach((user) => {
         console.log(
-          `[CRON] Планирование для ${user.telegramId} (${user.firstName})`
+          `[CRON] Планирование для ${user.telegramId} (${user.firstName})`,
         );
         // Проверяем валидность данных перед планированием
         if (this.validateUserData(user)) {
           this.scheduleUserTasks(user);
         } else {
           console.warn(
-            `Пользователь ${user.telegramId} ${user.firstName} имеет невалидные данные времени или таймзоны. Задачи не запланированы.`
+            `Пользователь ${user.telegramId} ${user.firstName} имеет невалидные данные времени или таймзоны. Задачи не запланированы.`,
           );
           // Можно добавить логику для уведомления пользователя или администратора
         }
@@ -79,7 +79,7 @@ export class ScheduleService {
 
     if (!user.isActive || !this.validateUserData(user)) {
       console.log(
-        `Пользователь ${user.telegramId} неактивен. Задачи не планируются.`
+        `Пользователь ${user.telegramId} неактивен. Задачи не планируются.`,
       );
       return;
     }
@@ -87,7 +87,7 @@ export class ScheduleService {
     try {
       const measurementKeyboard = new InlineKeyboard().text(
         "✍️ Ввести результат",
-        "enter_measurement"
+        "enter_measurement",
       ); // Кнопка для ввода
 
       // --- Утренние задачи ---
@@ -105,22 +105,22 @@ export class ScheduleService {
         tasks.morningReminder1 = this.createCronJob(
           `${format(reminder1Time, "m")} ${format(reminder1Time, "H")} * * *`,
           // timezone,
-          `🔔 Напоминание: Скоро (через 60 мин) нужно измерить давление (${user.morningTime}).`,
-          user.chatId
+          `🔔 Нагадування: Скоро (через 60 хв) потрібно заміряти тиск (${user.morningTime}).`,
+          user.chatId,
         );
 
         tasks.morningReminder2 = this.createCronJob(
           `${format(reminder2Time, "m")} ${format(reminder2Time, "H")} * * *`,
           // timezone,
-          `❗️ Напоминание: Скоро (через 30 мин) нужно измерить давление (${user.morningTime}).`,
-          user.chatId
+          `❗️ Нагадування: Скоро (через 30 хв) потрібно заміряти тиск (${user.morningTime}).`,
+          user.chatId,
         );
 
         tasks.morningPrompt = this.createCronJob(
           `${morningTime.minute} ${morningTime.hour} * * *`,
-          `⏰ Пора измерить утреннее давление и пульс! Жду ваши результаты (например: 120/80 75).`,
+          `⏰ Пора заміряти ранкові тиск і пульс! Чекаю ваші результати (наприклад: 120/80 75).`,
           user.chatId,
-          measurementKeyboard
+          measurementKeyboard,
         );
       }
 
@@ -133,34 +133,34 @@ export class ScheduleService {
         tasks.eveningReminder1 = this.createCronJob(
           `${format(reminder1Time, "m")} ${format(reminder1Time, "H")} * * *`,
           // timezone,
-          `🔔 Напоминание: Скоро (через 60 мин) нужно измерить давление (${user.eveningTime}).`,
-          user.chatId
+          `🔔 Нагадування: Скоро (через 60 хв) потрібно заміряти тиск (${user.eveningTime}).`,
+          user.chatId,
         );
 
         tasks.eveningReminder2 = this.createCronJob(
           `${format(reminder2Time, "m")} ${format(reminder2Time, "H")} * * *`,
           // timezone,
-          `❗️ Напоминание: Скоро (через 30 мин) нужно измерить давление (${user.eveningTime}).`,
-          user.chatId
+          `❗️ Нагадування: Скоро (через 30 хв) потрібно заміряти тиск (${user.eveningTime}).`,
+          user.chatId,
         );
 
         tasks.eveningPrompt = this.createCronJob(
           `${eveningTime.minute} ${eveningTime.hour} * * *`,
           // timezone,
-          `⏰ Пора измерить вечернее давление и пульс! Жду ваши результаты (например: 120/80 75).`,
+          `⏰ Пора заміряти вечерній тиск и пульс! Чекаю ваші результати (например: 120/80 75).`,
           user.chatId,
-          measurementKeyboard
+          measurementKeyboard,
         );
       }
 
       this.scheduledTasks.set(user.telegramId, tasks);
       console.log(
-        `Задачи для пользователя ${user.telegramId} ${user.firstName} успешно запланированы.`
+        `Задачи для пользователя ${user.telegramId} ${user.firstName} успешно запланированы.`,
       );
     } catch (error) {
       console.error(
         `Ошибка планирования задач для пользователя ${user.telegramId}:`,
-        error
+        error,
       );
       // Удаляем частично созданные задачи, если возникла ошибка
       this.removeUserTasks(user.telegramId);
@@ -177,7 +177,7 @@ export class ScheduleService {
     // timezone: string,
     message: string,
     chatId: number,
-    keyboard?: InlineKeyboard
+    keyboard?: InlineKeyboard,
   ): cron.ScheduledTask | undefined {
     try {
       const task = cron.schedule(
@@ -192,12 +192,12 @@ export class ScheduleService {
           } catch (error: any) {
             console.error(
               `[CRON] Ошибка отправки сообщения в чат ${chatId}:`,
-              error.message
+              error.message,
             );
             // TODO: Добавить логику обработки ошибок (например, деактивация пользователя после N неудач)
             if (error.description?.includes("bot was blocked by the user")) {
               console.warn(
-                `[CRON] Пользователь ${chatId} заблокировал бота. Рекомендуется пометить его как неактивного.`
+                `[CRON] Пользователь ${chatId} заблокировал бота. Рекомендуется пометить его как неактивного.`,
               );
               // await User.findOneAndUpdate({ chatId }, { isActive: false });
               // this.removeUserTasks(telegramId); // Нужен telegramId здесь
@@ -207,7 +207,7 @@ export class ScheduleService {
         {
           scheduled: true,
           // timezone: timezone, // Указываем таймзону пользователя!
-        }
+        },
       );
       return task;
     } catch (error) {
@@ -231,7 +231,7 @@ export class ScheduleService {
    * Парсит время 'HH:MM' и возвращает объект с часами, минутами и объектом Date.
    */
   private parseTime(
-    timeString: string
+    timeString: string,
   ): { hour: number; minute: number; date: Date } | null {
     const match = timeString.match(/^(\d{2}):(\d{2})$/);
     if (!match) return null;
@@ -247,7 +247,7 @@ export class ScheduleService {
       now.getDate(),
       hour,
       minute,
-      0
+      0,
     );
     return { hour, minute, date };
   }

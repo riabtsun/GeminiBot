@@ -1,6 +1,7 @@
 import User from "../../models/User";
 import { CommandContext, InlineKeyboard } from "grammy";
 import { MyContext } from "../../bot";
+import { botTexts } from "../../botTexts";
 
 export const editCommand = async (ctx: CommandContext<MyContext>) => {
   const userId = ctx.from?.id;
@@ -11,29 +12,25 @@ export const editCommand = async (ctx: CommandContext<MyContext>) => {
   try {
     const user = await User.findOne({ telegramId: userId });
     if (!user) {
-      await ctx.reply(
-        "Вы еще  не зарегистрированы. Пожалуйста, используйте /register."
-      );
+      await ctx.reply(botTexts.editCommand.notRegistered);
       return;
     }
     const editKeyboard = new InlineKeyboard()
-      .text("👤 Изменить ФИО", "edit_profile")
+      .text("👤 Змінити ПІБ", "edit_profile")
       .row() // .row() переносит на след. строку
-      .text("⏰ Изменить время и пояс", "edit_schedule")
+      .text("⏰ Змінити час", "edit_schedule")
       .row()
-      .text("📊 Изменить последнее измерение", "edit_last_measurement");
+      .text("📊 Змінити останнє вимірювання", "edit_last_measurement");
     // TODO: Добавить кнопку "Отмена" или "Назад" ?
 
-    await ctx.reply("🎛️ Что вы хотите изменить?", {
+    await ctx.reply("🎛️ Що ви хочете змінити?", {
       reply_markup: editKeyboard,
     });
   } catch (error) {
     console.error(
       `[Command /edit] Ошибка при обработке команды для ${userId}:`,
-      error
+      error,
     );
-    await ctx.reply(
-      "Произошла ошибка при получении ваших данных. Попробуйте позже."
-    );
+    await ctx.reply(botTexts.editCommand.dataError);
   }
 };

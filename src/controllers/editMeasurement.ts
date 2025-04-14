@@ -1,12 +1,13 @@
 import { MyConversation, MyContext } from "../bot";
 import Measurement from "../models/Measurement";
+import { botTexts } from "../botTexts";
 
 export const EDIT_MEASUREMENT_CONVERSATION_ID = "edit_measurement_conv";
 
 // --- Функция диалога ---
 export async function editMeasurementConversation(
   conversation: MyConversation,
-  ctx: MyContext
+  ctx: MyContext,
 ) {
   const session = await conversation.external((ctx) => ctx.session);
 
@@ -17,17 +18,13 @@ export async function editMeasurementConversation(
   const measurementId = session.lastMeasurementId;
 
   if (!userId || !measurementId) {
-    await ctx.reply(
-      "Произошла ошибка: не найден ID редактируемого измерения. Пожалуйста, начните сначала с команды /edit."
-    );
+    await ctx.reply(botTexts.measurement.errorId);
     // Очищаем на всякий случай
     session.lastMeasurementId = "";
     return;
   }
 
-  await ctx.reply(
-    "📊 Введите новые значения для последнего измерения в формате Давление/Давление Пульс (например: 120/80 75)"
-  );
+  await ctx.reply(botTexts.measurement.newMeasurement);
 
   let newSystolic: number | undefined;
   let newDiastolic: number | undefined;
@@ -59,9 +56,7 @@ export async function editMeasurementConversation(
         pulse < 30 ||
         pulse > 250
       ) {
-        await ctx.reply(
-          "😬 Значения выходят за разумные пределы. Пожалуйста, проверьте и введите снова (например: 120/80 75):"
-        );
+        await ctx.reply("botTexts.measurement.strangeValues");
         // Остаемся в цикле while
       } else {
         // Значения корректны, сохраняем и выходим из цикла
@@ -71,11 +66,9 @@ export async function editMeasurementConversation(
       }
     } else {
       // Формат неверный
-      await ctx.reply(
-        "❗️ Неверный формат.\n" +
-          "Пожалуйста, введите данные в формате **Давление/Давление Пульс** (например: `120/80 75`):",
-        { parse_mode: "Markdown" }
-      );
+      await ctx.reply(botTexts.measurement.invalidValues, {
+        parse_mode: "Markdown",
+      });
       // Остаемся в цикле while
     }
   }
@@ -92,29 +85,27 @@ export async function editMeasurementConversation(
             pulse: newPulse,
           },
         },
-        { new: true } // Возвращаем обновленный документ
-      )
+        { new: true }, // Возвращаем обновленный документ
+      ),
     );
 
     if (!updatedMeasurement) {
-      await ctx.reply(
-        "❌ Не удалось найти измерение для обновления. Возможно, оно было удалено. Начните с /edit."
-      );
+      await ctx.reply(botTexts.measurement.notFound);
     } else {
-      await ctx.reply(`✅ Последнее измерение успешно обновлено!
-Новые значения: ${updatedMeasurement.systolic} / ${updatedMeasurement.diastolic}, пульс ${updatedMeasurement.pulse}`);
+      await ctx.reply(
+        botTexts.measurement.updatedResults +
+          `Нові значення: ${updatedMeasurement.systolic} / ${updatedMeasurement.diastolic}, пульс ${updatedMeasurement.pulse}`,
+      );
       console.log(
-        `[Conv edit_measurement] Пользователь ${userId} обновил измерение ${measurementId}.`
+        `[Conv edit_measurement] Пользователь ${userId} обновил измерение ${measurementId}.`,
       );
     }
   } catch (error) {
     console.error(
       `[Conv edit_measurement] Ошибка обновления измерения ${measurementId} для ${userId}:`,
-      error
+      error,
     );
-    await ctx.reply(
-      "❌ Произошла ошибка при сохранении новых данных измерения. Попробуйте снова позже."
-    );
+    await ctx.reply(botTexts.measurement.savingError);
   } finally {
     // Очищаем ID из сессии независимо от результата
     session.lastMeasurementId = "";

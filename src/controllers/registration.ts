@@ -2,6 +2,7 @@ import { Conversation } from "@grammyjs/conversations";
 import { MyContext, BotContext } from "../bot"; // Импортируем наш кастомный тип контекста
 import User from "../models/User"; // Импортируем модель пользователя
 import { Context, InlineKeyboard } from "grammy";
+import { botTexts } from "../botTexts";
 
 // Определяем тип для нашей конкретной conversation
 type MyConversation = Conversation<MyContext, MyContext>;
@@ -12,46 +13,44 @@ export const REGISTRATION_CONVERSATION_ID = "registration";
 // Функция-генератор для диалога регистрации
 export async function registrationConversation(
   conversation: MyConversation,
-  ctx: MyContext
+  ctx: MyContext,
 ) {
   // Проверяем, существует ли пользователь (на всякий случай, если команду вызвали повторно)
   const existingUser = await conversation.external(() =>
-    User.findOne({ telegramId: ctx.from?.id })
+    User.findOne({ telegramId: ctx.from?.id }),
   );
 
   if (existingUser) {
-    await ctx.reply("Вы уже зарегистрированы!");
+    await ctx.reply(botTexts.registration.alreadyRegistered);
     return; // Завершаем диалог
   }
 
-  await ctx.reply(
-    "Начинаем регистрацию! Пожалуйста, ответьте на несколько вопросов."
-  );
+  await ctx.reply(botTexts.registration.start);
 
   // --- Имя ---
-  await ctx.reply("1. Введите ваше имя:");
+  await ctx.reply(botTexts.registration.enterName);
   const firstNameCtx = await conversation.waitFor("message:text");
   const firstName = firstNameCtx.message.text.trim();
   if (!firstName) {
-    await ctx.reply("Имя не может быть пустым. Регистрация прервана.");
+    await ctx.reply(botTexts.registration.emptyName);
     return;
   }
 
   // --- Фамилия ---
-  await ctx.reply("2. Введите вашу фамилию:");
+  await ctx.reply(botTexts.registration.enterLastName);
   const lastNameCtx = await conversation.waitFor("message:text");
   const lastName = lastNameCtx.message.text.trim();
   if (!lastName) {
-    await ctx.reply("Фамилия не может быть пустой. Регистрация прервана.");
+    await ctx.reply(botTexts.registration.enterLastName);
     return;
   }
 
   // --- Отчество (опционально) ---
   const skipPatronymicKeyboard = new InlineKeyboard().text(
-    "Пропустить",
-    "skip_patronymic"
+    "Пропустити",
+    "skip_patronymic",
   );
-  await ctx.reply('3. Введите ваше отчество (или нажмите "Пропустить"):', {
+  await ctx.reply(botTexts.registration.enterPatronymic, {
     reply_markup: skipPatronymicKeyboard,
   });
 
@@ -65,19 +64,21 @@ export async function registrationConversation(
   if (patronymicAnswer.message?.text) {
     patronymic = patronymicAnswer.message.text.trim();
     // Убираем кнопку после ответа текстом (лучше ответить на callback_query, если он был)
-    await patronymicAnswer.reply("Отчество сохранено.", {
+    await patronymicAnswer.reply("По батькові збережено.", {
       reply_markup: { remove_keyboard: true },
     });
   } else if (patronymicAnswer.callbackQuery?.data === "skip_patronymic") {
-    await patronymicAnswer.answerCallbackQuery({ text: "Отчество пропущено." });
+    await patronymicAnswer.answerCallbackQuery({
+      text: "По батькові пропущено.",
+    });
     // Удаляем клавиатуру после нажатия кнопки
     await ctx.api.editMessageReplyMarkup(
       patronymicAnswer.chatId!,
-      patronymicAnswer.callbackQuery.message?.message_id!
+      patronymicAnswer.callbackQuery.message?.message_id!,
     );
   } else {
     // Неожиданный ответ
-    await ctx.reply("Неожиданный ответ. Регистрация прервана.");
+    await ctx.reply(botTexts.registration.invalidAnswer);
     // Если был callback_query, но не тот, отвечаем на него, чтобы убрать "часики"
     // await patronymicAnswer.callbackQuery?.answerCallbackQuery();
     await patronymicAnswer.answerCallbackQuery();
@@ -102,7 +103,7 @@ export async function registrationConversation(
   // --- Время утреннего измерения ---
   const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // Регулярка для ЧЧ:ММ
   await ctx.reply(
-    "5. Введите желаемое время для *утреннего* измерения (в формате ЧЧ:ММ, например, `08:00`):"
+    "5. Введите желаемое время для *утреннего* измерения (в формате ЧЧ:ММ, например, `08:00`):",
   );
   let morningTime: string | undefined = undefined;
   while (!morningTime) {
@@ -112,14 +113,14 @@ export async function registrationConversation(
       morningTime = timeInput;
     } else {
       await ctx.reply(
-        "Неверный формат времени. Введите время в формате ЧЧ:ММ (например, `08:00`):"
+        "Неверный формат времени. Введите время в формате ЧЧ:ММ (например, `08:00`):",
       );
     }
   }
 
   // --- Время вечернего измерения ---
   await ctx.reply(
-    "6. Введите желаемое время для *вечернего* измерения (в формате ЧЧ:ММ, например, `20:30`):"
+    "6. Введите желаемое время для *вечернего* измерения (в формате ЧЧ:ММ, например, `20:30`):",
   );
   let eveningTime: string | undefined = undefined;
   while (!eveningTime) {
@@ -129,7 +130,7 @@ export async function registrationConversation(
       eveningTime = timeInput;
     } else {
       await ctx.reply(
-        "Неверный формат времени. Введите время в формате ЧЧ:ММ (например, `20:30`):"
+        "Неверный формат времени. Введите время в формате ЧЧ:ММ (например, `20:30`):",
       );
     }
   }
@@ -147,7 +148,7 @@ export async function registrationConversation(
         morningTime,
         eveningTime,
         isActive: true, // Активируем пользователя
-      })
+      }),
     );
 
     await ctx.reply(`🎉 Регистрация успешно завершена!
@@ -160,7 +161,7 @@ export async function registrationConversation(
   } catch (error) {
     console.error("Ошибка при создании пользователя:", error);
     await ctx.reply(
-      "Произошла ошибка при сохранении данных. Попробуйте зарегистрироваться позже. /register"
+      "Произошла ошибка при сохранении данных. Попробуйте зарегистрироваться позже. /register",
     );
   }
 }

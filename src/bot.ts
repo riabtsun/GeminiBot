@@ -3,8 +3,6 @@ import {
   type Context,
   session,
   SessionFlavor,
-  InlineKeyboard,
-  CallbackQueryContext,
   NextFunction,
 } from "grammy";
 import { run, sequentialize } from "@grammyjs/runner";
@@ -18,8 +16,6 @@ import { MongoDBAdapter } from "@grammyjs/storage-mongodb";
 import mongoose from "mongoose";
 import "dotenv/config";
 import { connectDB } from "./db";
-import User from "./models/User";
-import Measurement from "./models/Measurement";
 import {
   registrationConversation,
   REGISTRATION_CONVERSATION_ID,

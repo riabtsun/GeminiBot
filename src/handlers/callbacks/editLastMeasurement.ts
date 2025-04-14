@@ -2,17 +2,20 @@ import User from "../../models/User";
 import Measurement from "../../models/Measurement";
 import { format } from "date-fns";
 import { MyContext } from "../../bot";
+import { botTexts } from "../../botTexts";
 
 export const editLastMeasurement = async (ctx: MyContext) => {
   if (!ctx.from || !ctx.chat) return;
 
   const userId = ctx.from.id;
   console.log(
-    `[Callback edit_last_measurement] Нажата кнопка пользователем ${userId}`
+    `[Callback edit_last_measurement] Нажата кнопка пользователем ${userId}`,
   );
 
   try {
-    await ctx.answerCallbackQuery({ text: "Ищу последнее измерение..." });
+    await ctx.answerCallbackQuery({
+      text: botTexts.editLastMeasurement.search,
+    });
     // Удаляем клавиатуру из предыдущего сообщения
     if (ctx?.callbackQuery?.message) {
       try {
@@ -25,7 +28,7 @@ export const editLastMeasurement = async (ctx: MyContext) => {
     // 1. Найти пользователя, чтобы получить его _id
     const user = await User.findOne({ telegramId: userId });
     if (!user) {
-      await ctx.reply("Не удалось найти вашу регистрацию. Попробуйте /start.");
+      await ctx.reply(botTexts.editLastMeasurement.registrationError);
       return;
     }
 
@@ -35,29 +38,27 @@ export const editLastMeasurement = async (ctx: MyContext) => {
     }).sort({ timestamp: -1 }); // Сортируем по времени измерения (убывание)
 
     if (!lastMeasurement) {
-      await ctx.reply("🤷 У вас еще нет сохраненных измерений.");
+      await ctx.reply(botTexts.editLastMeasurement.emptyMeasurement);
       ctx.session.lastMeasurementId = "";
       return;
     }
     console.log(
-      `[Callback edit_last_measurement] Проверка ctx.session перед записью ID для user ${userId}.`
+      `[Callback edit_last_measurement] Проверка ctx.session перед записью ID для user ${userId}.`,
     );
 
     // Выведем сам объект сессии, если он есть (может быть полезно)
     if (ctx.session) {
       console.log(
         `[Callback edit_last_measurement] Содержимое ctx.session:`,
-        ctx.session
+        ctx.session,
       );
     }
 
     if (typeof ctx.session === "undefined") {
       console.error(
-        `[Callback edit_last_measurement] КРИТИЧЕСКАЯ ОШИБКА: ctx.session НЕ ОПРЕДЕЛЕН для user ${userId}!`
+        `[Callback edit_last_measurement] КРИТИЧЕСКАЯ ОШИБКА: ctx.session НЕ ОПРЕДЕЛЕН для user ${userId}!`,
       );
-      await ctx.reply(
-        "Произошла внутренняя ошибка (сессия не найдена).\nПожалуйста, попробуйте использовать команду /start, а затем снова /edit."
-      );
+      await ctx.reply(botTexts.editLastMeasurement.sessionError);
       // Прерываем выполнение, чтобы избежать TypeError
       return;
     }
@@ -69,11 +70,11 @@ export const editLastMeasurement = async (ctx: MyContext) => {
     // 3. Сохранить ID измерения в сессию
     ctx.session.lastMeasurementId = lastMeasurement._id.toString();
     console.log(
-      `[Callback edit_last_measurement] ID ${ctx.session.lastMeasurementId} установлен в сессию.`
+      `[Callback edit_last_measurement] ID ${ctx.session.lastMeasurementId} установлен в сессию.`,
     );
     console.log(
       `[Callback edit_last_measurement] Состояние ctx.session ПЕРЕД conversation.enter:`,
-      JSON.stringify(ctx.session)
+      JSON.stringify(ctx.session),
     );
 
     // 4. Показать пользователю найденное измерение
@@ -82,11 +83,11 @@ export const editLastMeasurement = async (ctx: MyContext) => {
 
     const formattedTime = format(measurementTimeInUser, "dd.MM.yyyy HH:mm");
 
-    await ctx.reply(`Найденное последнее измерение (${formattedTime}):
-    Давление: ${lastMeasurement.systolic} / ${lastMeasurement.diastolic}
+    await ctx.reply(`Знайдено останнє вимірювання (${formattedTime}):
+    Тиск: ${lastMeasurement.systolic} / ${lastMeasurement.diastolic}
     Пульс: ${lastMeasurement.pulse}
 
-    Хотите изменить эти значения? Начинаем процесс редактирования...`);
+    Хочете змінити ці значення? Починаємо процес редагування...`);
 
     // До входа в диалог
     console.log(`[Callback edit_last_measurement] Проверка сессии:`, {
@@ -96,7 +97,7 @@ export const editLastMeasurement = async (ctx: MyContext) => {
 
     // Убедитесь, что ID измерения сохранен
     if (!ctx.session.lastMeasurementId) {
-      await ctx.reply("Ошибка: ID измерения не сохранен в сессии");
+      await ctx.reply(botTexts.editLastMeasurement.measurementIdError);
       return;
     }
 
@@ -105,10 +106,8 @@ export const editLastMeasurement = async (ctx: MyContext) => {
   } catch (error) {
     console.error(
       `[Callback edit_last_measurement] Ошибка для пользователя ${userId}:`,
-      error
+      error,
     );
-    await ctx.reply(
-      "Произошла ошибка при поиске последнего измерения. Попробуйте позже."
-    );
+    await ctx.reply(botTexts.editLastMeasurement.searchError);
   }
 };

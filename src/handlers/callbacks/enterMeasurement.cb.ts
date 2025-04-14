@@ -1,14 +1,15 @@
 import { CallbackQueryContext } from "grammy";
 import { MyContext } from "../../bot";
+import { botTexts } from "../../botTexts";
 
 export const enterMeasurementCb = async (
-  ctx: CallbackQueryContext<MyContext>
+  ctx: CallbackQueryContext<MyContext>,
 ) => {
   if (!ctx.chat || !ctx.from) return; // Проверка наличия chat и from
 
   ctx.session.expectingMeasurement = true; // Устанавливаем флаг ожидания в сессии
   console.log(
-    `[Callback] Пользователь ${ctx.from.id} нажал кнопку ввода. Установлен флаг ожидания.`
+    `[Callback] Пользователь ${ctx.from.id} нажал кнопку ввода. Установлен флаг ожидания.`,
   );
 
   await ctx.answerCallbackQuery(); // Убираем "часики" с кнопки
@@ -20,12 +21,10 @@ export const enterMeasurementCb = async (
     } catch (e) {
       console.warn(
         `[Callback] Не удалось убрать клавиатуру у сообщения ${ctx.callbackQuery.message.message_id}`,
-        e
+        e,
       );
     }
   }
 
-  await ctx.reply(
-    "Пожалуйста, введите результат в формате Давление/Давление Пульс (например: 120/80 75)"
-  );
+  await ctx.reply(botTexts.enterMeasurement);
 };
