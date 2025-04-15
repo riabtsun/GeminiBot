@@ -48,6 +48,8 @@ export class ScheduleService {
           // Можно добавить логику для уведомления пользователя или администратора
         }
       });
+      // Запускаем периодическое обновление
+      this.scheduleUpdateTask();
       console.log("Инициализация расписаний завершена.");
     } catch (error) {
       console.error("Ошибка при инициализации расписаний:", error);
@@ -214,6 +216,34 @@ export class ScheduleService {
       console.error(`[CRON] Ошибка создания задачи (${cronPattern}):`, error);
       return undefined;
     }
+  }
+
+  private scheduleUpdateTask() {
+    cron.schedule("* * * * *", async () => {
+      console.log("[CRON] Запуск периодического обновления расписаний...");
+      try {
+        const activeUsers = await User.find({ isActive: true });
+
+        // Получаем текущие запланированные задачи
+        const currentUserIds = Array.from(this.scheduledTasks.keys());
+
+        // Обновляем или добавляем задачи для активных пользователей
+        activeUsers.forEach((user) => {
+          if (this.validateUserData(user)) {
+            this.scheduleUserTasks(user);
+          }
+        });
+
+        // Удаляем задачи для неактивных пользователей
+        currentUserIds.forEach((userId) => {
+          if (!activeUsers.some((user) => user.telegramId === userId)) {
+            this.removeUserTasks(userId);
+          }
+        });
+      } catch (error) {
+        console.error("[CRON] Ошибка при обновлении расписаний:", error);
+      }
+    });
   }
 
   /**
