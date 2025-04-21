@@ -11,13 +11,13 @@ const FONT_NAME = "DejaVuSans"; // Имя для регистрации шриф
 const PAGE_MARGIN = 50;
 const TABLE_TOP_Y = 150; // Начальная позиция таблицы по Y
 const ROW_HEIGHT = 20;
-const COL_WIDTHS = [100, 60, 70, 70, 70]; // Ширина колонок: Дата, Время, Сист, Диа, Пульс
+const COL_WIDTHS = [100, 60, 80, 80, 70]; // Ширина колонок: Дата, Время, Сист, Диа, Пульс
 const HEADERS = ["Дата", "Час", "Систолічний", "Діастолічний", "Пульс"];
 
 if (!fs.existsSync(FONT_PATH)) {
   console.warn(`!!! ВНИМАНИЕ: Файл шрифта не найден по пути: ${FONT_PATH}`);
   console.warn(
-    "Кириллица в PDF может отображаться некорректно. Убедитесь, что шрифт существует и путь указан верно."
+    "Кириллица в PDF может отображаться некорректно. Убедитесь, что шрифт существует и путь указан верно.",
   );
   // Можно добавить логику использования стандартного шрифта как fallback, но кириллица будет потеряна
 }
@@ -33,7 +33,7 @@ export class PdfService {
   public generateMeasurementsPDF(
     user: IUser,
     measurements: IMeasurement[],
-    title: string
+    title: string,
   ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
@@ -76,7 +76,7 @@ export class PdfService {
           .text(
             `Користувач: ${user.lastName} ${user.firstName} ${
               user.patronymic || ""
-            }`
+            }`,
           );
         const generationTime = format(new Date(), "dd.MM.yyyy HH:mm:ss");
         doc.text(`Звіт згенеровано: ${generationTime}`);
@@ -130,7 +130,7 @@ export class PdfService {
   private drawTableRow(
     doc: PDFKit.PDFDocument,
     y: number,
-    measurement: IMeasurement
+    measurement: IMeasurement,
   ) {
     let currentX = PAGE_MARGIN;
 

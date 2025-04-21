@@ -41,14 +41,14 @@ export const generateReport = async (ctx: MyContext) => {
     }
 
     console.log(
-      `[Command /report] Найдено ${measurements.length} измерений для user ${userId} за текущий месяц.`
+      `[Command /report] Найдено ${measurements.length} измерений для user ${userId} за текущий месяц.`,
     );
 
     // 4. Сгенерировать PDF
     // Формируем заголовок и имя файла
     const monthName = format(now, "LLLL", { locale: uk }); // Название месяца по-русски
     const year = format(now, "yyyy");
-    const reportTitle = `Отчет измерений за ${monthName} ${year}`;
+    const reportTitle = `Звіт вимірювань за ${monthName} ${year}`;
     const filename = `report_${format(now, "yyyy-MM")}.pdf`;
 
     await ctx.replyWithChatAction("upload_document"); // Показываем статус еще раз
@@ -56,7 +56,7 @@ export const generateReport = async (ctx: MyContext) => {
     const pdfBuffer = await pdfService.generateMeasurementsPDF(
       user,
       measurements,
-      reportTitle
+      reportTitle,
     );
 
     // 5. Отправить PDF
@@ -67,10 +67,10 @@ export const generateReport = async (ctx: MyContext) => {
   } catch (error) {
     console.error(
       `[Command /report] Ошибка при генерации/отправке отчета для ${userId}:`,
-      error
+      error,
     );
     await ctx.reply(
-      "❌ Произошла ошибка при создании отчета. Попробуйте позже."
+      "❌ Произошла ошибка при создании отчета. Попробуйте позже.",
     );
   }
 };
