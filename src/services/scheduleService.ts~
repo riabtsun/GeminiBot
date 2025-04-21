@@ -1,8 +1,12 @@
 import cron from "node-cron";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, InputFile } from "grammy";
 import { MyContext } from "../bot";
 import User, { IUser } from "../models/User";
-import { subMinutes, parse, format } from "date-fns"; // Для работы со временем
+import { subMinutes, parse, format, subMonths } from "date-fns";
+import { uk } from "date-fns/locale/uk"; // Локаль для русского языка
+import { endOfMonth, startOfMonth } from "date-fns/";
+import Measurement from "../models/Measurement";
+import { pdfService } from "./pdfService"; // Для работы со временем
 
 // Интерфейс для хранения запланированных задач пользователя
 interface UserTasks {
@@ -48,10 +52,134 @@ export class ScheduleService {
           // Можно добавить логику для уведомления пользователя или администратора
         }
       });
+      // Запускаем периодическое обновление
+      this.scheduleUpdateTask();
       console.log("Инициализация расписаний завершена.");
     } catch (error) {
       console.error("Ошибка при инициализации расписаний:", error);
     }
+    cron.schedule(
+      "0 3 1 * *",
+      async () => {
+        console.log(
+          "[CRON Monthly] Запуск задачи ежемесячного отчета и очистки..."
+        );
+        const reportDate = new Date(); // Дата запуска задачи
+
+        // 1. Определить границы ПРЕДЫДУЩЕГО месяца (в UTC)
+        const previousMonthDate = subMonths(reportDate, 1); // Дата в пределах предыдущего месяца
+        const startPrevMonthUTC = startOfMonth(previousMonthDate);
+        const endPrevMonthUTC = endOfMonth(previousMonthDate);
+
+        // 2. Подготовить заголовок и имя файла для отчета
+        const prevMonthName = format(previousMonthDate, "LLLL", { locale: uk });
+        const prevYear = format(previousMonthDate, "yyyy");
+        const reportTitle = `Отчет измерений за ${prevMonthName} ${prevYear}`;
+        const filename = `report_${format(previousMonthDate, "yyyy-MM")}.pdf`;
+        console.log(
+          `[CRON Monthly] Подготовка отчета за период: ${format(
+            startPrevMonthUTC,
+            "dd.MM.yyyy"
+          )} - ${format(endPrevMonthUTC, "dd.MM.yyyy")}`
+        );
+        try {
+          // 3. Найти всех активных пользователей
+          const activeUsers = await User.find({ isActive: true });
+          console.log(
+            `[CRON Monthly] Найдено ${activeUsers.length} активных пользователей.`
+          );
+
+          // 4. Обработать каждого пользователя
+          for (const user of activeUsers) {
+            console.log(
+              `[CRON Monthly] Обработка пользователя <span class="math-inline">\{user\.telegramId\} \(</span>{user.firstName})`
+            );
+            try {
+              const measurements = await Measurement.find({
+                userId: user._id,
+                timestamp: {
+                  $gte: startPrevMonthUTC,
+                  $lte: endPrevMonthUTC,
+                },
+              }).sort({ timestamp: "asc" });
+
+              if (measurements && measurements.length > 0) {
+                console.log(
+                  `[CRON Monthly] Найдено ${measurements.length} измерений для user ${user.telegramId}. Генерация PDF...`
+                );
+                const pdfBuffer = await pdfService.generateMeasurementsPDF(
+                  user,
+                  measurements,
+                  reportTitle
+                );
+
+                console.log(
+                  `[CRON Monthly] Отправка отчета user ${user.telegramId}...`
+                );
+                await this.bot.api.sendDocument(
+                  user.chatId,
+                  new InputFile(pdfBuffer, filename),
+                  {
+                    caption: reportTitle,
+                  }
+                );
+                console.log(
+                  `[CRON Monthly] Отчет успешно отправлен user ${user.telegramId}.`
+                );
+              } else {
+                console.log(
+                  `[CRON Monthly] Нет данных для отчета user ${user.telegramId} за прошлый месяц.`
+                );
+                // Можно отправить сообщение пользователю об отсутствии данных, но это может быть спамом
+              }
+            } catch (userError: any) {
+              console.error(
+                `[CRON Monthly] Ошибка при обработке/отправке отчета для user ${user.telegramId}:`,
+                userError.message || userError
+              );
+              // Продолжаем обработку других пользователей
+            }
+            // Небольшая пауза, чтобы не перегружать API Telegram (опционально)
+            await new Promise((resolve) => setTimeout(resolve, 50)); // 50ms пауза
+          } // end for loop
+          // 5. Очистка старых данных (старше начала предыдущего месяца)
+          const cutoffDate = startPrevMonthUTC; // Удаляем все ДО начала месяца, за который сгенерировали отчет
+          console.log(
+            `[CRON Monthly] Удаление измерений старше ${format(
+              cutoffDate,
+              "dd.MM.yyyy HH:mm:ss"
+            )}...`
+          );
+          try {
+            const deleteResult = await Measurement.deleteMany({
+              timestamp: { $lt: cutoffDate },
+            });
+            console.log(
+              `[CRON Monthly] Успешно удалено ${deleteResult.deletedCount} старых измерений.`
+            );
+          } catch (deleteError) {
+            console.error(
+              "[CRON Monthly] Ошибка при удалении старых измерений:",
+              deleteError
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[CRON Monthly] Глобальная ошибка в задаче ежемесячного отчета:",
+            error
+          );
+        }
+        console.log(
+          "[CRON Monthly] Задача ежемесячного отчета и очистки завершена."
+        );
+      },
+      {
+        timezone: "UTC", // Запускаем задачу по UTC, чтобы избежать проблем с летним/зимним временем для самой задачи
+      }
+    );
+    console.log(
+      "[CRON Monthly] Задача ежемесячного отчета и очистки запланирована."
+    );
   }
 
   /**
@@ -105,20 +233,20 @@ export class ScheduleService {
         tasks.morningReminder1 = this.createCronJob(
           `${format(reminder1Time, "m")} ${format(reminder1Time, "H")} * * *`,
           // timezone,
-          `🔔 Напоминание: Скоро (через 60 мин) нужно измерить давление (${user.morningTime}).`,
+          `🔔 Нагадування: Скоро (через 60 хв) потрібно заміряти тиск (${user.morningTime}).`,
           user.chatId
         );
 
         tasks.morningReminder2 = this.createCronJob(
           `${format(reminder2Time, "m")} ${format(reminder2Time, "H")} * * *`,
           // timezone,
-          `❗️ Напоминание: Скоро (через 30 мин) нужно измерить давление (${user.morningTime}).`,
+          `❗️ Нагадування: Скоро (через 30 хв) потрібно заміряти тиск (${user.morningTime}).`,
           user.chatId
         );
 
         tasks.morningPrompt = this.createCronJob(
           `${morningTime.minute} ${morningTime.hour} * * *`,
-          `⏰ Пора измерить утреннее давление и пульс! Жду ваши результаты (например: 120/80 75).`,
+          `⏰ Пора заміряти ранкові тиск і пульс! Чекаю ваші результати (наприклад: 120/80 75).`,
           user.chatId,
           measurementKeyboard
         );
@@ -133,21 +261,21 @@ export class ScheduleService {
         tasks.eveningReminder1 = this.createCronJob(
           `${format(reminder1Time, "m")} ${format(reminder1Time, "H")} * * *`,
           // timezone,
-          `🔔 Напоминание: Скоро (через 60 мин) нужно измерить давление (${user.eveningTime}).`,
+          `🔔 Нагадування: Скоро (через 60 хв) потрібно заміряти тиск (${user.eveningTime}).`,
           user.chatId
         );
 
         tasks.eveningReminder2 = this.createCronJob(
           `${format(reminder2Time, "m")} ${format(reminder2Time, "H")} * * *`,
           // timezone,
-          `❗️ Напоминание: Скоро (через 30 мин) нужно измерить давление (${user.eveningTime}).`,
+          `❗️ Нагадування: Скоро (через 30 хв) потрібно заміряти тиск (${user.eveningTime}).`,
           user.chatId
         );
 
         tasks.eveningPrompt = this.createCronJob(
           `${eveningTime.minute} ${eveningTime.hour} * * *`,
           // timezone,
-          `⏰ Пора измерить вечернее давление и пульс! Жду ваши результаты (например: 120/80 75).`,
+          `⏰ Пора заміряти вечерній тиск и пульс! Чекаю ваші результати (например: 120/80 75).`,
           user.chatId,
           measurementKeyboard
         );
@@ -216,6 +344,34 @@ export class ScheduleService {
     }
   }
 
+  private scheduleUpdateTask() {
+    cron.schedule("* * * * *", async () => {
+      console.log("[CRON] Запуск периодического обновления расписаний...");
+      try {
+        const activeUsers = await User.find({ isActive: true });
+
+        // Получаем текущие запланированные задачи
+        const currentUserIds = Array.from(this.scheduledTasks.keys());
+
+        // Обновляем или добавляем задачи для активных пользователей
+        activeUsers.forEach((user) => {
+          if (this.validateUserData(user)) {
+            this.scheduleUserTasks(user);
+          }
+        });
+
+        // Удаляем задачи для неактивных пользователей
+        currentUserIds.forEach((userId) => {
+          if (!activeUsers.some((user) => user.telegramId === userId)) {
+            this.removeUserTasks(userId);
+          }
+        });
+      } catch (error) {
+        console.error("[CRON] Ошибка при обновлении расписаний:", error);
+      }
+    });
+  }
+
   /**
    * Проверяет валидность данных пользователя для планирования.
    */
@@ -225,7 +381,6 @@ export class ScheduleService {
       this.validateTimeFormat(user.eveningTime)
       // this.validateTimezone(user.timezone)
     );
-
   }
 
   /**

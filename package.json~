@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "build": "tsc  && xcopy /E /I src\\assets dist\\assets",
+    "build": "tsc && cp -r src/assets dist/",
     "start": "node dist/bot.js",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/bot.ts",
     "test": "echo \"Error: no test specified\" && exit 1"

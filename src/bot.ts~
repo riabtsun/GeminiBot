@@ -42,7 +42,7 @@ import { editScheduleCb } from "./handlers/callbacks/editSchedule.cb";
 import { enterMeasurementCb } from "./handlers/callbacks/enterMeasurement.cb";
 import { measurementValidator } from "./handlers/listeners/measurementValidator";
 import { editLastMeasurement } from "./handlers/callbacks/editLastMeasurement";
-import { generateReport } from "./handlers/commands/report.command";
+import {generateReport} from "./handlers/commands/report.command";
 
 interface SessionData {
   expectingMeasurement?: boolean;
@@ -118,7 +118,7 @@ bot.command("register", registerCommand);
 
 bot.command("edit", editCommand);
 
-bot.command("report", generateReport);
+bot.command('report', generateReport)
 
 // <<<--- НОВЫЙ ОБРАБОТЧИК: для кнопки "Изменить ФИО" --->>>
 bot.callbackQuery("edit_profile", editProfileCb);

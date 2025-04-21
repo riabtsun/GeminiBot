@@ -1,8 +1,12 @@
 import cron from "node-cron";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, InputFile } from "grammy";
 import { MyContext } from "../bot";
 import User, { IUser } from "../models/User";
-import { subMinutes, parse, format } from "date-fns"; // Для работы со временем
+import { subMinutes, parse, format, subMonths } from "date-fns";
+import { uk } from "date-fns/locale/uk"; // Локаль для русского языка
+import { endOfMonth, startOfMonth } from "date-fns";
+import Measurement from "../models/Measurement";
+import { pdfService } from "./pdfService"; // Для работы со временем
 
 // Интерфейс для хранения запланированных задач пользователя
 interface UserTasks {
@@ -32,18 +36,18 @@ export class ScheduleService {
     try {
       const activeUsers = await User.find({ isActive: true });
       console.log(
-        `Найдено ${activeUsers.length} активных пользователей для планирования.`,
+        `Найдено ${activeUsers.length} активных пользователей для планирования.`
       );
       activeUsers.forEach((user) => {
         console.log(
-          `[CRON] Планирование для ${user.telegramId} (${user.firstName})`,
+          `[CRON] Планирование для ${user.telegramId} (${user.firstName})`
         );
         // Проверяем валидность данных перед планированием
         if (this.validateUserData(user)) {
           this.scheduleUserTasks(user);
         } else {
           console.warn(
-            `Пользователь ${user.telegramId} ${user.firstName} имеет невалидные данные времени или таймзоны. Задачи не запланированы.`,
+            `Пользователь ${user.telegramId} ${user.firstName} имеет невалидные данные времени или таймзоны. Задачи не запланированы.`
           );
           // Можно добавить логику для уведомления пользователя или администратора
         }
@@ -54,6 +58,128 @@ export class ScheduleService {
     } catch (error) {
       console.error("Ошибка при инициализации расписаний:", error);
     }
+    cron.schedule(
+      "0 3 1 * *",
+      async () => {
+        console.log(
+          "[CRON Monthly] Запуск задачи ежемесячного отчета и очистки..."
+        );
+        const reportDate = new Date(); // Дата запуска задачи
+
+        // 1. Определить границы ПРЕДЫДУЩЕГО месяца (в UTC)
+        const previousMonthDate = subMonths(reportDate, 1); // Дата в пределах предыдущего месяца
+        const startPrevMonthUTC = startOfMonth(previousMonthDate);
+        const endPrevMonthUTC = endOfMonth(previousMonthDate);
+
+        // 2. Подготовить заголовок и имя файла для отчета
+        const prevMonthName = format(previousMonthDate, "LLLL", { locale: uk });
+        const prevYear = format(previousMonthDate, "yyyy");
+        const reportTitle = `Отчет измерений за ${prevMonthName} ${prevYear}`;
+        const filename = `report_${format(previousMonthDate, "yyyy-MM")}.pdf`;
+        console.log(
+          `[CRON Monthly] Подготовка отчета за период: ${format(
+            startPrevMonthUTC,
+            "dd.MM.yyyy"
+          )} - ${format(endPrevMonthUTC, "dd.MM.yyyy")}`
+        );
+        try {
+          // 3. Найти всех активных пользователей
+          const activeUsers = await User.find({ isActive: true });
+          console.log(
+            `[CRON Monthly] Найдено ${activeUsers.length} активных пользователей.`
+          );
+
+          // 4. Обработать каждого пользователя
+          for (const user of activeUsers) {
+            console.log(
+              `[CRON Monthly] Обработка пользователя <span class="math-inline">\{user\.telegramId\} \(</span>{user.firstName})`
+            );
+            try {
+              const measurements = await Measurement.find({
+                userId: user._id,
+                timestamp: {
+                  $gte: startPrevMonthUTC,
+                  $lte: endPrevMonthUTC,
+                },
+              }).sort({ timestamp: "asc" });
+
+              if (measurements && measurements.length > 0) {
+                console.log(
+                  `[CRON Monthly] Найдено ${measurements.length} измерений для user ${user.telegramId}. Генерация PDF...`
+                );
+                const pdfBuffer = await pdfService.generateMeasurementsPDF(
+                  user,
+                  measurements,
+                  reportTitle
+                );
+
+                console.log(
+                  `[CRON Monthly] Отправка отчета user ${user.telegramId}...`
+                );
+                await this.bot.api.sendDocument(
+                  user.chatId,
+                  new InputFile(pdfBuffer, filename),
+                  {
+                    caption: reportTitle,
+                  }
+                );
+                console.log(
+                  `[CRON Monthly] Отчет успешно отправлен user ${user.telegramId}.`
+                );
+              } else {
+                console.log(
+                  `[CRON Monthly] Нет данных для отчета user ${user.telegramId} за прошлый месяц.`
+                );
+                // Можно отправить сообщение пользователю об отсутствии данных, но это может быть спамом
+              }
+            } catch (userError: any) {
+              console.error(
+                `[CRON Monthly] Ошибка при обработке/отправке отчета для user ${user.telegramId}:`,
+                userError.message || userError
+              );
+              // Продолжаем обработку других пользователей
+            }
+            // Небольшая пауза, чтобы не перегружать API Telegram (опционально)
+            await new Promise((resolve) => setTimeout(resolve, 50)); // 50ms пауза
+          } // end for loop
+          // 5. Очистка старых данных (старше начала предыдущего месяца)
+          const cutoffDate = startPrevMonthUTC; // Удаляем все ДО начала месяца, за который сгенерировали отчет
+          console.log(
+            `[CRON Monthly] Удаление измерений старше ${format(
+              cutoffDate,
+              "dd.MM.yyyy HH:mm:ss"
+            )}...`
+          );
+          try {
+            const deleteResult = await Measurement.deleteMany({
+              timestamp: { $lt: cutoffDate },
+            });
+            console.log(
+              `[CRON Monthly] Успешно удалено ${deleteResult.deletedCount} старых измерений.`
+            );
+          } catch (deleteError) {
+            console.error(
+              "[CRON Monthly] Ошибка при удалении старых измерений:",
+              deleteError
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[CRON Monthly] Глобальная ошибка в задаче ежемесячного отчета:",
+            error
+          );
+        }
+        console.log(
+          "[CRON Monthly] Задача ежемесячного отчета и очистки завершена."
+        );
+      },
+      {
+        timezone: "UTC", // Запускаем задачу по UTC, чтобы избежать проблем с летним/зимним временем для самой задачи
+      }
+    );
+    console.log(
+      "[CRON Monthly] Задача ежемесячного отчета и очистки запланирована."
+    );
   }
 
   /**
@@ -81,7 +207,7 @@ export class ScheduleService {
 
     if (!user.isActive || !this.validateUserData(user)) {
       console.log(
-        `Пользователь ${user.telegramId} неактивен. Задачи не планируются.`,
+        `Пользователь ${user.telegramId} неактивен. Задачи не планируются.`
       );
       return;
     }
@@ -89,7 +215,7 @@ export class ScheduleService {
     try {
       const measurementKeyboard = new InlineKeyboard().text(
         "✍️ Ввести результат",
-        "enter_measurement",
+        "enter_measurement"
       ); // Кнопка для ввода
 
       // --- Утренние задачи ---
@@ -108,21 +234,21 @@ export class ScheduleService {
           `${format(reminder1Time, "m")} ${format(reminder1Time, "H")} * * *`,
           // timezone,
           `🔔 Нагадування: Скоро (через 60 хв) потрібно заміряти тиск (${user.morningTime}).`,
-          user.chatId,
+          user.chatId
         );
 
         tasks.morningReminder2 = this.createCronJob(
           `${format(reminder2Time, "m")} ${format(reminder2Time, "H")} * * *`,
           // timezone,
           `❗️ Нагадування: Скоро (через 30 хв) потрібно заміряти тиск (${user.morningTime}).`,
-          user.chatId,
+          user.chatId
         );
 
         tasks.morningPrompt = this.createCronJob(
           `${morningTime.minute} ${morningTime.hour} * * *`,
           `⏰ Пора заміряти ранкові тиск і пульс! Чекаю ваші результати (наприклад: 120/80 75).`,
           user.chatId,
-          measurementKeyboard,
+          measurementKeyboard
         );
       }
 
@@ -136,14 +262,14 @@ export class ScheduleService {
           `${format(reminder1Time, "m")} ${format(reminder1Time, "H")} * * *`,
           // timezone,
           `🔔 Нагадування: Скоро (через 60 хв) потрібно заміряти тиск (${user.eveningTime}).`,
-          user.chatId,
+          user.chatId
         );
 
         tasks.eveningReminder2 = this.createCronJob(
           `${format(reminder2Time, "m")} ${format(reminder2Time, "H")} * * *`,
           // timezone,
           `❗️ Нагадування: Скоро (через 30 хв) потрібно заміряти тиск (${user.eveningTime}).`,
-          user.chatId,
+          user.chatId
         );
 
         tasks.eveningPrompt = this.createCronJob(
@@ -151,18 +277,18 @@ export class ScheduleService {
           // timezone,
           `⏰ Пора заміряти вечерній тиск и пульс! Чекаю ваші результати (например: 120/80 75).`,
           user.chatId,
-          measurementKeyboard,
+          measurementKeyboard
         );
       }
 
       this.scheduledTasks.set(user.telegramId, tasks);
       console.log(
-        `Задачи для пользователя ${user.telegramId} ${user.firstName} успешно запланированы.`,
+        `Задачи для пользователя ${user.telegramId} ${user.firstName} успешно запланированы.`
       );
     } catch (error) {
       console.error(
         `Ошибка планирования задач для пользователя ${user.telegramId}:`,
-        error,
+        error
       );
       // Удаляем частично созданные задачи, если возникла ошибка
       this.removeUserTasks(user.telegramId);
@@ -179,7 +305,7 @@ export class ScheduleService {
     // timezone: string,
     message: string,
     chatId: number,
-    keyboard?: InlineKeyboard,
+    keyboard?: InlineKeyboard
   ): cron.ScheduledTask | undefined {
     try {
       const task = cron.schedule(
@@ -194,12 +320,12 @@ export class ScheduleService {
           } catch (error: any) {
             console.error(
               `[CRON] Ошибка отправки сообщения в чат ${chatId}:`,
-              error.message,
+              error.message
             );
             // TODO: Добавить логику обработки ошибок (например, деактивация пользователя после N неудач)
             if (error.description?.includes("bot was blocked by the user")) {
               console.warn(
-                `[CRON] Пользователь ${chatId} заблокировал бота. Рекомендуется пометить его как неактивного.`,
+                `[CRON] Пользователь ${chatId} заблокировал бота. Рекомендуется пометить его как неактивного.`
               );
               // await User.findOneAndUpdate({ chatId }, { isActive: false });
               // this.removeUserTasks(telegramId); // Нужен telegramId здесь
@@ -209,7 +335,7 @@ export class ScheduleService {
         {
           scheduled: true,
           // timezone: timezone, // Указываем таймзону пользователя!
-        },
+        }
       );
       return task;
     } catch (error) {
@@ -261,7 +387,7 @@ export class ScheduleService {
    * Парсит время 'HH:MM' и возвращает объект с часами, минутами и объектом Date.
    */
   private parseTime(
-    timeString: string,
+    timeString: string
   ): { hour: number; minute: number; date: Date } | null {
     const match = timeString.match(/^(\d{2}):(\d{2})$/);
     if (!match) return null;
@@ -277,7 +403,7 @@ export class ScheduleService {
       now.getDate(),
       hour,
       minute,
-      0,
+      0
     );
     return { hour, minute, date };
   }
